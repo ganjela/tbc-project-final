@@ -1,56 +1,33 @@
-from pyspark.sql.functions import split, col, element_at
-from pyspark.sql.types import StructType, StructField, IntegerType, StringType, FloatType
-import logging
-import sys
+from pyspark.sql.functions import split, col, regexp_extract, regexp_replace, expr
 
-sys.dont_write_bytecode = True
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def parse_movie_blocks(partition):
-    current_movie = {}
-    for line in partition:
-        line = line.strip()
-        if line.startswith("ITEM "):
-            if "movie_id" in current_movie:  
-                yield (current_movie["movie_id"], 
-                       current_movie.get("Title"), 
-                       current_movie.get("ListPrice"))
-            try:
-                current_movie = {"movie_id": int(line.split()[1])}
-            except (IndexError, ValueError):
-                logging.error(f"Malformed ITEM line: {line}")
-                continue
-        elif "=" in line:
-            key, value = line.split("=", 1)
-            key = key.strip()
-            if key in ["Title", "ListPrice"]:
-                current_movie[key] = value.strip()
+def extract_key_value(df, key):
+    df = df.withColumn(
+        key,
+        expr(f"filter(value, x -> split(x, '=')[0] = '{key}')[0]")
+    ).withColumn(
+        key,
+        regexp_replace(col(key), f"^{key}=", "")
+    )
     
-    if "movie_id" in current_movie:
-        yield (current_movie["movie_id"], 
-               current_movie.get("Title"), 
-               current_movie.get("ListPrice"))
-
+    return df
 
 def process_movies(spark, file_path):
-    schema = StructType([
-        StructField("movie_id", IntegerType()),
-        StructField("Title", StringType()),
-        StructField("ListPrice", StringType()),
-    ])
+    
+    df = spark.read.text(file_path, lineSep="\n\n")
+    df_split = df.withColumn("value", split(df["value"], "\n"))
 
-    raw_rdd = spark.sparkContext.textFile(file_path)
-    parsed_rdd = raw_rdd.mapPartitions(parse_movie_blocks)
-    parsed_df = spark.createDataFrame(parsed_rdd, schema)
-
-    processed_df = parsed_df.withColumn(
-        "price_parts", split(col("ListPrice"), "\$")
-    ).withColumn(
-        "parsed_price", 
-        element_at(col("price_parts"), -1).cast(FloatType())
-    ).drop("price_parts", "ListPrice")
-
-    return processed_df.filter(
-        (col("parsed_price").isNotNull()) & 
-        (col("Title").isNotNull())
+    df_extracted = df_split.withColumn(
+        "movie_id", regexp_extract(col("value").getItem(0), r"ITEM (\d+)", 1).cast("int")
     )
+
+    required_keys = ["Title", "ListPrice"]
+    for key in required_keys:
+        df_extracted = extract_key_value(df_extracted, key)
+
+    df_extracted = df_extracted.withColumn(
+        "parsed_price", regexp_extract(col("ListPrice"), r"\$(\d+\.\d+)", 1).cast("float")
+    ).drop("ListPrice")
+
+    return df_extracted.filter(col("parsed_price").isNotNull() &
+                                col("movie_id").isNotNull() &
+                                col("Title").isNotNull())
