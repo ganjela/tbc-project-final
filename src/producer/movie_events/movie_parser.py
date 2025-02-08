@@ -1,6 +1,14 @@
+from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import split, col, regexp_extract, regexp_replace, expr
 
-def extract_key_value(df, key):
+def extract_key_value(df: DataFrame, key: str) -> DataFrame:
+    """
+    Extracts a key-value pair from a multi-line text column and adds it as a new column.
+
+    :param df: Input DataFrame containing a column with multi-line text.
+    :param key: The key whose corresponding value needs to be extracted.
+    :return: DataFrame with the extracted key-value pair as a new column.
+    """
     df = df.withColumn(
         key,
         expr(f"filter(lines, x -> split(x, '=')[0] = '{key}')[0]")
@@ -11,14 +19,21 @@ def extract_key_value(df, key):
     
     return df    
 
-def process_movies(spark, file_path):
-    MOVIE_ID_PATTERN = r"ITEM (\d+)"
-    PRICE_PATTERN = r"\$(\d+\.\d+)"
-    REQUIRED_FIELDS = ["Title", "ListPrice"]
+def process_movies(spark: SparkSession, file_path: str) -> DataFrame:
+    """
+    Reads and processes a movie dataset stored as multi-line text.
 
-    raw_df = spark.read.text(file_path, lineSep="\n\n")
+    :param spark: The Spark session instance.
+    :param file_path: Path to the file containing movie data.
+    :return: Processed DataFrame with extracted and transformed movie details.
+    """
+    MOVIE_ID_PATTERN: str = r"ITEM (\d+)"
+    PRICE_PATTERN: str = r"\$(\d+\.\d+)"
+    REQUIRED_FIELDS: list[str] = ["Title", "ListPrice"]
 
-    split_df = (
+    raw_df: DataFrame = spark.read.text(file_path, lineSep="\n\n")
+
+    split_df: DataFrame = (
         raw_df
         .withColumn("lines", split(col("value"), "\n"))
         .withColumn("movie_id", 
@@ -29,7 +44,7 @@ def process_movies(spark, file_path):
     for field in REQUIRED_FIELDS:
         split_df = extract_key_value(split_df, field)
 
-    processed_df = (
+    processed_df: DataFrame = (
         split_df
         .withColumn("parsed_price",
                    regexp_extract(col("ListPrice"), PRICE_PATTERN, 1)

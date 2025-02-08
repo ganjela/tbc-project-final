@@ -1,14 +1,15 @@
 import logging
-import time
-from pyspark.sql import SparkSession
+import os
+import sys
+from typing import Iterator, Tuple
+
+from pyspark.sql import SparkSession, Row, DataFrame
 from producer.utils.kafka_producer import KafkaProducer
 from producer.utils.avro_manager import AvroSerializationManager
-from producer.utils.producer_config import producer_conf, schema_registry_url, auth_user_info
+from producer.utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
 from confluent_kafka.serialization import SerializationContext, MessageField
-from producer.movie_events.movie_events import MovieCatalogEnriched
+from producer.movie_events.movie_event_helpers import movie_row_to_dict, movie_to_dict
 from producer.movie_events.movie_parser import process_movies
-import os
-import sys 
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,34 +17,56 @@ load_dotenv()
 sys.dont_write_bytecode = True
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def send_partition(partition):
-    avro_manager = AvroSerializationManager(
-        schema_registry_url,
-        auth_user_info,
-        topic,
-        MovieCatalogEnriched.to_dict
-    )
-    producer = KafkaProducer(producer_conf)
+TOPIC: str = "movies_catalog_enriched"
+MOVIES_FILE_PATH: str = os.getenv("MOVIES_FILE_PATH")
+
+
+def serialize_movie(row: Row,
+                    avro_manager: AvroSerializationManager,
+                    topic: str) -> Tuple[str, bytes]:
+    """
+    Transform a Spark Row into a dictionary and serialize it using Avro.
     
-    for row in partition:
-        movie = MovieCatalogEnriched(
-            movie_id=row.movie_id,
-            title=row.Title,
-            parsed_price=row.parsed_price,
-        )
-        
-        movie_data = movie()
-        
-        print("Preparing to send movie data: ", movie_data)
-        
+    :param row: A single Spark Row containing movie data.
+    :param avro_manager: An instance of AvroSerializationManager for serialization.
+    :param topic: The Kafka topic name.
+    :return: A tuple containing the movie id as a string and the serialized message as bytes.
+    """
+    movie_data = movie_row_to_dict(row)
+    print("Preparing to send movie data:", movie_data)
+    
+    serialized_value: bytes = avro_manager.avro_serializer(
+        movie_data,
+        SerializationContext(topic, MessageField.VALUE)
+    )
+    return str(movie_data["movie_id"]), serialized_value
+
+
+def send_partition(partition: Iterator[Row]) -> None:
+    """
+    Process each partition of the RDD by initializing external Kafka objects
+    on the worker node, serializing the movie data, and sending it to Kafka.
+    
+    :param partition: An iterator over Spark Rows in a partition.
+    """
+    avro_manager: AvroSerializationManager = AvroSerializationManager(
+        SCHEMA_REGISTRY_URL,
+        AUTH_USER_INFO,
+        TOPIC,
+        movie_to_dict
+    )
+    producer: KafkaProducer = KafkaProducer(PRODUCER_CONF)
+    
+    serialized_messages = map(
+        lambda row: serialize_movie(row, avro_manager, TOPIC),
+        partition
+    )
+    
+    for message_key, serialized_value in serialized_messages:
         try:
-            serialized_value = avro_manager.avro_serializer(
-                movie_data, 
-                SerializationContext(topic, MessageField.VALUE)
-            )
             producer.produce_message(
-                topic=topic,
-                message_key=str(movie.movie_id),
+                topic=TOPIC,
+                message_key=message_key,
                 message_value=serialized_value
             )
         except Exception as e:
@@ -53,23 +76,13 @@ def send_partition(partition):
 
 
 if __name__ == "__main__":
-    topic = "movies_catalog_enriched"
-    movies_file = os.getenv("MOVIES_FILE_PATH")
-
-    spark = SparkSession.builder \
+    spark: SparkSession = SparkSession.builder \
         .appName("MovieEventsProducer") \
         .getOrCreate()
-
+    
     try:
-        start_time = time.time()
-
-        valid_movies = process_movies(spark, movies_file)
-
-        elapsed_time = time.time() - start_time
-        logging.info(f"Time taken to process movies: {elapsed_time:.4f} seconds")
-
+        valid_movies: DataFrame = process_movies(spark, MOVIES_FILE_PATH)
         valid_movies.rdd.foreachPartition(send_partition)
-
     except Exception as e:
         logging.error(f"Spark processing error: {str(e)}")
     finally:

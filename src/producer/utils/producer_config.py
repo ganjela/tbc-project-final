@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-producer_conf = {
+PRODUCER_CONF = {
     'bootstrap.servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS'),
     'security.protocol': os.getenv('KAFKA_SECURITY_PROTOCOL'),
     'sasl.mechanism': os.getenv('KAFKA_SASL_MECHANISM'),
@@ -11,5 +11,5 @@ producer_conf = {
     'client.id': os.getenv('KAFKA_CLIENT_ID'),
 }
 
-schema_registry_url = os.getenv('SCHEMA_REGISTRY_URL')
-auth_user_info = os.getenv('BASIC_AUTH_USER_INFO')
+SCHEMA_REGISTRY_URL = os.getenv('SCHEMA_REGISTRY_URL')
+AUTH_USER_INFO = os.getenv('BASIC_AUTH_USER_INFO')
