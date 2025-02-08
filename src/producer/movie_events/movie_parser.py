@@ -3,31 +3,38 @@ from pyspark.sql.functions import split, col, regexp_extract, regexp_replace, ex
 def extract_key_value(df, key):
     df = df.withColumn(
         key,
-        expr(f"filter(value, x -> split(x, '=')[0] = '{key}')[0]")
+        expr(f"filter(lines, x -> split(x, '=')[0] = '{key}')[0]")
     ).withColumn(
         key,
         regexp_replace(col(key), f"^{key}=", "")
     )
     
-    return df
+    return df    
 
 def process_movies(spark, file_path):
-    
-    df = spark.read.text(file_path, lineSep="\n\n")
-    df_split = df.withColumn("value", split(df["value"], "\n"))
+    MOVIE_ID_PATTERN = r"ITEM (\d+)"
+    PRICE_PATTERN = r"\$(\d+\.\d+)"
+    REQUIRED_FIELDS = ["Title", "ListPrice"]
 
-    df_extracted = df_split.withColumn(
-        "movie_id", regexp_extract(col("value").getItem(0), r"ITEM (\d+)", 1).cast("int")
+    raw_df = spark.read.text(file_path, lineSep="\n\n")
+
+    split_df = (
+        raw_df
+        .withColumn("lines", split(col("value"), "\n"))
+        .withColumn("movie_id", 
+                   regexp_extract(col("lines").getItem(0), MOVIE_ID_PATTERN, 1)
+                   .cast("int"))
     )
 
-    required_keys = ["Title", "ListPrice"]
-    for key in required_keys:
-        df_extracted = extract_key_value(df_extracted, key)
+    for field in REQUIRED_FIELDS:
+        split_df = extract_key_value(split_df, field)
 
-    df_extracted = df_extracted.withColumn(
-        "parsed_price", regexp_extract(col("ListPrice"), r"\$(\d+\.\d+)", 1).cast("float")
-    ).drop("ListPrice")
+    processed_df = (
+        split_df
+        .withColumn("parsed_price",
+                   regexp_extract(col("ListPrice"), PRICE_PATTERN, 1)
+                   .cast("float"))
+        .drop("ListPrice", "value", "lines")
+    )
 
-    return df_extracted.filter(col("parsed_price").isNotNull() &
-                                col("movie_id").isNotNull() &
-                                col("Title").isNotNull())
+    return processed_df.dropna()
