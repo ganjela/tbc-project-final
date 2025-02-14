@@ -9,7 +9,7 @@ from producer.utils.avro_manager import AvroSerializationManager
 from producer.utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
 from confluent_kafka.serialization import SerializationContext, MessageField
 from producer.movie_events.movie_event_helpers import movie_row_to_dict, movie_to_dict
-from producer.movie_events.movie_parser import process_movies
+from producer.movie_events.movie_processor import process_movies
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -19,6 +19,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 TOPIC: str = "movies_catalog_enriched"
 MOVIES_FILE_PATH: str = os.getenv("MOVIES_FILE_PATH")
+PROCESSED_INPUT_PATH : str = os.getenv("PROCESSED_INPUT_PATH")
 
 
 def serialize_movie(row: Row,
@@ -74,17 +75,37 @@ def send_partition(partition: Iterator[Row]) -> None:
     
     producer.close()
 
-
-if __name__ == "__main__":
-    spark: SparkSession = SparkSession.builder \
-        .appName("MovieEventsProducer") \
-        .getOrCreate()
+def main():
+    
+    if not PROCESSED_INPUT_PATH:
+        raise ValueError("Missing PROCESSED_INPUT_PATH environment variable")
+    
+    logging.info(f"Producing events from: {PROCESSED_INPUT_PATH}")
+    
+    spark = SparkSession.builder.appName("MovieEventProduction").getOrCreate()
     
     try:
-        valid_movies: DataFrame = process_movies(spark, MOVIES_FILE_PATH)
+        valid_movies = spark.read.parquet(PROCESSED_INPUT_PATH)
         valid_movies.rdd.foreachPartition(send_partition)
-    except Exception as e:
-        logging.error(f"Spark processing error: {str(e)}")
+        logging.info("Successfully produced all events to Kafka")
+        
     finally:
         spark.stop()
-        logging.info("Spark session closed")
+
+if __name__ == "__main__":
+    main()
+
+
+# if __name__ == "__main__":
+#     spark: SparkSession = SparkSession.builder \
+#         .appName("MovieEventsProducer") \
+#         .getOrCreate()
+    
+#     try:
+#         valid_movies: DataFrame = process_movies(spark, MOVIES_FILE_PATH)
+#         valid_movies.rdd.foreachPartition(send_partition)
+#     except Exception as e:
+#         logging.error(f"Spark processing error: {str(e)}")
+#     finally:
+#         spark.stop()
+#         logging.info("Spark session closed")

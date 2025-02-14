@@ -30,5 +30,3 @@ class AvroSerializationManager:
         """
         schema_metadata = self.schema_registry_client.get_latest_version(self.subject)
         return schema_metadata.schema.schema_str
-    
-    

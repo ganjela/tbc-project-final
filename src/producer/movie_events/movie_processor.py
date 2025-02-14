@@ -1,5 +1,17 @@
+import os
+import logging
+from dotenv import load_dotenv
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import split, col, regexp_extract, regexp_replace, expr
+from pyspark.sql import SparkSession
+
+load_dotenv()
+
+MOVIES_FILE_PATH: str = os.getenv("MOVIES_FILE_PATH")
+MOVIES_OUTPUT_PATH: str = os.getenv("MOVIES_OUTPUT_PATH")
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def extract_key_value(df: DataFrame, key: str) -> DataFrame:
     """
@@ -53,3 +65,24 @@ def process_movies(spark: SparkSession, file_path: str) -> DataFrame:
     )
 
     return processed_df.dropna()
+
+
+def main():
+    if not MOVIES_FILE_PATH or not MOVIES_OUTPUT_PATH:
+        raise ValueError("Missing required environment variables")
+    
+    logger.info(f"Processing movies from: {MOVIES_FILE_PATH}")
+    
+    spark = SparkSession.builder.appName("MovieProcessing").getOrCreate()
+    
+    try:
+        processed_df = process_movies(spark, MOVIES_FILE_PATH)
+        processed_df.write.parquet(MOVIES_OUTPUT_PATH, mode="overwrite")
+
+        logger.info(f"Successfully wrote processed data to: {MOVIES_OUTPUT_PATH}")
+        
+    finally:
+        spark.stop()
+
+if __name__ == "__main__":
+    main()
