@@ -4,9 +4,9 @@ import sys
 from typing import Iterator, Tuple
 
 from pyspark.sql import SparkSession, Row, DataFrame
-from producer.utils.kafka_producer import KafkaProducer
-from producer.utils.avro_manager import AvroSerializationManager
-from producer.utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
+from utils.kafka_producer import KafkaProducer
+from utils.avro_manager import AvroSerializationManager
+from utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
 from confluent_kafka.serialization import SerializationContext, MessageField
 from producer.movie_events.movie_event_helpers import movie_row_to_dict, movie_to_dict
 from producer.movie_events.movie_processor import process_movies

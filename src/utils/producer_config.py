@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)
 
 PRODUCER_CONF = {
     'bootstrap.servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS'),
