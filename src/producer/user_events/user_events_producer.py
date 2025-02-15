@@ -1,60 +1,86 @@
 import sys
-import random
 import logging
+import random
 from uuid import uuid4
-from KafkaProducer import KafkaProducer
-from AvroSerializationManager import AvroSerializationManager
-from AddToCartEvent import AddToCartEvent, load_items_from_file, generate_random_add_to_cart
-from CheckoutEvent import CheckoutEvent, generate_random_checkout
-from ItemViewEvent import ItemViewEvent, generate_random_item_view
-from UserRegistration import UserRegistration
-from SignInEvent import SignInEvent
-from SignOutEvent import SignOutEvent
-from Config import producer_conf, schema_registry_url, auth_user_info
+from utils.kafka_producer import KafkaProducer
+from utils.avro_manager import AvroSerializationManager
+from utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
+from events import SignInEvent, generate_random_sign_in
+from events import SignOutEvent, generate_random_sign_out
+from events import CheckoutEvent, generate_random_checkout
+from events import ItemViewEvent, generate_random_item_view
+from events import UserRegistration, generate_random_registration
+from events import AddToCartEvent, generate_random_add_to_cart_event
 from confluent_kafka.serialization import SerializationContext, MessageField
-from generationEventProducer.userRegistration.userregistrationEvent import initialize_db
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 sys.dont_write_bytecode = True
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def send_event(producer, avro_manager, topic, generate_event):
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+producer = KafkaProducer(PRODUCER_CONF)
+
+EVENT_TOPICS = {
+    "sign_in": "sign_in_topic",
+    "sign_out": "sign_out_topic",
+    "checkout_to_cart": "checkout_to_cart_topic",
+    "item_view": "item_view_topic",
+    "user_registration": "user_registration_topic",
+    "add_to_cart": "add_to_cart_topic",
+}
+
+avro_managers = {
+    "sign_in": AvroSerializationManager(SCHEMA_REGISTRY_URL, AUTH_USER_INFO, EVENT_TOPICS["sign_in"], SignInEvent.to_dict),
+    "sign_out": AvroSerializationManager(SCHEMA_REGISTRY_URL, AUTH_USER_INFO, EVENT_TOPICS["sign_out"], SignOutEvent.to_dict),
+    "checkout_to_cart": AvroSerializationManager(SCHEMA_REGISTRY_URL, AUTH_USER_INFO, EVENT_TOPICS["checkout_to_cart"], CheckoutEvent.to_dict),
+    "item_view": AvroSerializationManager(SCHEMA_REGISTRY_URL, AUTH_USER_INFO, EVENT_TOPICS["item_view"], ItemViewEvent.to_dict),
+    "user_registration": AvroSerializationManager(SCHEMA_REGISTRY_URL, AUTH_USER_INFO, EVENT_TOPICS["user_registration"], UserRegistration.to_dict),
+    "add_to_cart": AvroSerializationManager(SCHEMA_REGISTRY_URL, AUTH_USER_INFO, EVENT_TOPICS["add_to_cart"], AddToCartEvent.to_dict),
+}
+
+USER_DB_PATH = os.getenv("USER_DB_PATH")
+ITEM_IDS_PATH = os.getenv("ITEM_IDS_PATH")
+
+def generate_event(event_type: str):
+    if event_type == "sign_in":
+        return generate_random_sign_in()
+    elif event_type == "sign_out":
+        return generate_random_sign_out()
+    elif event_type == "checkout_to_cart":
+        return generate_random_checkout(USER_DB_PATH)
+    elif event_type == "item_view":
+        return generate_random_item_view(USER_DB_PATH, ITEM_IDS_PATH)
+    elif event_type == "user_registration":
+        return generate_random_registration(USER_DB_PATH)
+    elif event_type == "add_to_cart":
+        return generate_random_add_to_cart_event(USER_DB_PATH, ITEM_IDS_PATH)
+    else:
+        raise ValueError(f"Invalid event type: {event_type}")
+
+if __name__ == "__main__":
     try:
         while True:
-            event_data = generate_event()
-            serialized_key = avro_manager.string_serializer(str(uuid4()))
-            serialized_value = avro_manager.avro_serializer(event_data(), SerializationContext(topic, MessageField.VALUE))
+            event_type = random.choice(list(EVENT_TOPICS.keys())) 
+            event_data = generate_event(event_type)
+            serialized_key = avro_managers[event_type].string_serializer(str(uuid4()))
+            serialized_value = avro_managers[event_type].avro_serializer(
+                event_data(), SerializationContext(EVENT_TOPICS[event_type], MessageField.VALUE)
+            )
 
-            print(event_data())
+            logging.info(f"Sending {event_type} event: {event_data()}")
+
             producer.produce_message(
-                topic=topic,
+                topic=EVENT_TOPICS[event_type],
                 message_key=serialized_key,
                 message_value=serialized_value
             )
+
     except KeyboardInterrupt:
         logging.info("Process interrupted by user.")
     except Exception as e:
         logging.error(f"An error occurred: {e}")
     finally:
         producer.close()
-
-if __name__ == "__main__":
-    producer = KafkaProducer(producer_conf)
-    initialize_db()
-
-    event_configurations = [
-        ("AddToCartEvent", AddToCartEvent.to_dict, generate_random_add_to_cart, load_items_from_file("items.txt")),
-        ("CheckoutEvent", CheckoutEvent.to_dict, generate_random_checkout, [str(uuid4()) for _ in range(500)]),
-        ("ItemViewEvent", ItemViewEvent.to_dict, generate_random_item_view, load_items_from_file("items.txt")),
-        ("UserRegistration", UserRegistration.to_dict, UserRegistration.generate_random_registration, None),
-        ("SignInEvent", SignInEvent.to_dict, SignInEvent.generate_random_sign_in, None),
-        ("SignOutEvent", SignOutEvent.to_dict, SignOutEvent.generate_random_sign_out, None),
-    ]
-
-    users = [random.randint(1, 100000) for _ in range(1000)]  # Simulating existing users
-
-    for topic, to_dict, generator, additional_data in event_configurations:
-        avro_manager = AvroSerializationManager(schema_registry_url, auth_user_info, topic, to_dict)
-        if additional_data:
-            send_event(producer, avro_manager, topic, lambda: generator(users, additional_data))
-        else:
-            send_event(producer, avro_manager, topic, generator)
