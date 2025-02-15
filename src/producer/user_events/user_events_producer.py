@@ -1,6 +1,5 @@
 import sys
 import logging
-import random
 from uuid import uuid4
 from utils.kafka_producer import KafkaProducer
 from utils.avro_manager import AvroSerializationManager
@@ -63,21 +62,21 @@ def generate_event(event_type: str):
 if __name__ == "__main__":
     try:
         while True:
-            event_type = random.choice(list(EVENT_TOPICS.keys())) 
-            event_data = generate_event(event_type)
-            serialized_key = avro_managers[event_type].string_serializer(str(uuid4()))
-            serialized_value = avro_managers[event_type].avro_serializer(
-                event_data(), SerializationContext(EVENT_TOPICS[event_type], MessageField.VALUE)
-            )
+            for event_type in EVENT_TOPICS.keys():
+                event_data = generate_event(event_type)
+                serialized_key = avro_managers[event_type].string_serializer(str(uuid4()))
+                serialized_value = avro_managers[event_type].avro_serializer(
+                    event_data(), SerializationContext(EVENT_TOPICS[event_type], MessageField.VALUE)
+                )
 
-            logging.info(f"Sending {event_type} event: {event_data()}")
+                logging.info(f"Sending {event_type} event: {event_data()}")
 
-            producer.produce_message(
-                topic=EVENT_TOPICS[event_type],
-                message_key=serialized_key,
-                message_value=serialized_value
-            )
-
+                producer.produce_message(
+                    topic=EVENT_TOPICS[event_type],
+                    message_key=serialized_key,
+                    message_value=serialized_value
+                )
+        
     except KeyboardInterrupt:
         logging.info("Process interrupted by user.")
     except Exception as e:
