@@ -169,3 +169,15 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+airflow.db
+airflow.cfg
+logs/
+
+airflow-webserver.pid
+airflow-scheduler.pid
+airflow-worker.pid
+airflow-celery.pid
+airflow-executor.pid
+
+standalone_admin_password.txt
