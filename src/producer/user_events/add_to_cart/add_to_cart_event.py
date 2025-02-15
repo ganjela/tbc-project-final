@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Union
 from dotenv import load_dotenv
+from producer.user_events import get_random_user_id
 
 load_dotenv()
 
@@ -13,6 +14,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 MOVIES_FILE_PATH: str = os.getenv("MOVIES_FILE_PATH", "")
 ITEM_IDS_PATH: str = os.getenv("ITEM_IDS_PATH", "")
+USER_DB_PATH: str = os.getenv("USER_DB_PATH", "")
 
 class AddToCartEvent:
     """
@@ -49,6 +51,37 @@ class AddToCartEvent:
             "item_id": data.get("item_id"),
             "cart_id": data.get("cart_id"),
         }
+
+    def save_to_db(self, db_path: str) -> None:
+        """
+        Saves the event to the SQLite database.
+        
+        Args:
+            db_path (str): Path to the SQLite database file.
+        """
+        try:
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS cart_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        event_name TEXT NOT NULL,
+                        timestamp TEXT NOT NULL,
+                        item_id TEXT NOT NULL,
+                        cart_id TEXT UNIQUE NOT NULL
+                    )
+                """)
+                cursor.execute("""
+                    INSERT INTO cart_events (user_id, event_name, timestamp, item_id, cart_id)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (self.user_id, self.event_name, self.timestamp, self.item_id, self.cart_id))
+                conn.commit()
+                logging.info(f"Event saved: {self.cart_id}")
+        except sqlite3.Error as e:
+            logging.error(f"Database error: {e}")
+
+
 
 def extract_item_ids(input_file: str, output_file: str) -> None:
     """
@@ -100,37 +133,6 @@ def select_random_item_id(filename: str) -> str:
         raise
     return selected_item
 
-def get_random_user_id(db_path: str) -> int:
-    """
-    Retrieves a random user_id from the SQLite database.
-
-    Args:
-        db_path (str): Path to the SQLite database file.
-
-    Returns:
-        int: A randomly selected user_id.
-
-    Raises:
-        ValueError: If no users are found in the database.
-    """
-    try:
-        with sqlite3.connect(db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT MAX(rowid) FROM users;")
-            max_rowid = cursor.fetchone()[0]
-            if max_rowid is None:
-                raise ValueError("No users found in the database.")
-            random_rowid = random.randint(1, max_rowid)
-            cursor.execute("SELECT user_id FROM users WHERE rowid >= ? LIMIT 1;", (random_rowid,))
-            result = cursor.fetchone()
-            if result is None:
-                cursor.execute("SELECT user_id FROM users LIMIT 1;")
-                result = cursor.fetchone()
-            return result[0]
-    except sqlite3.Error as e:
-        logging.error(f"SQLite error: {e}")
-        raise
-
 def generate_random_add_to_cart_event(db_path: str, items_file: str) -> AddToCartEvent:
     """
     Generates a random AddToCartEvent.
@@ -157,7 +159,8 @@ def main():
     extract_item_ids(MOVIES_FILE_PATH, ITEM_IDS_PATH)
     
     try:
-        event = generate_random_add_to_cart_event(MOVIES_FILE_PATH, ITEM_IDS_PATH)
+        event = generate_random_add_to_cart_event(USER_DB_PATH, ITEM_IDS_PATH)
+        event.save_to_db(USER_DB_PATH)
         logging.info(f"Generated event: {event()}")
     except Exception as e:
         logging.error(f"Failed to generate add-to-cart event: {e}")
