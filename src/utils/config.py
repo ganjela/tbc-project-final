@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 PRODUCER_CONFIG = {
     'bootstrap.servers': os.getenv('KAFKA_BOOTSTRAP_SERVERS'),
@@ -12,8 +12,11 @@ PRODUCER_CONFIG = {
     'client.id': os.getenv('KAFKA_CLIENT_ID'),
 }
 
+SCHEMA_REGISTRY_URL = os.getenv('SCHEMA_REGISTRY_URL')
+AUTH_USER_INFO = os.getenv('BASIC_AUTH_USER_INFO')
+
 SNOWFLAKE_OPTIONS = {
-    "sfURL": os.getenv("SF_URL"),
+    "sfURL": os.getenv("SF_URL"),       
     "sfAccount": os.getenv("SF_ACCOUNT"),
     "sfUser": os.getenv("SF_USER"),
     "sfPassword": os.getenv("SF_PASSWORD"),
@@ -23,19 +26,14 @@ SNOWFLAKE_OPTIONS = {
 }
 
 CONSUMER_CONFIG = {
-    "bootstrap.servers": os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
-    "security.protocol": os.getenv("KAFKA_SECURITY_PROTOCOL"),
-    "sasl.mechanism": os.getenv("KAFKA_SASL_MECHANISM"),
-    "sasl.username": os.getenv("KAFKA_SASL_USERNAME"),
-    "sasl.password": os.getenv("KAFKA_SASL_PASSWORD"),
-    "group.id": os.getenv("KAFKA_CONSUMER_GROUP_ID"),
-    "auto.offset.reset": os.getenv("KAFKA_AUTO_OFFSET_RESET", "earliest")
+        "kafka.bootstrap.servers":os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
+        "kafka.security.protocol":os.getenv("KAFKA_SECURITY_PROTOCOL"),
+        "kafka.sasl.mechanism":os.getenv("KAFKA_SASL_MECHANISM"),
+        "kafka.sasl.jaas.config":f'org.apache.kafka.common.security.plain.PlainLoginModule required username="{os.getenv("KAFKA_SASL_USERNAME")}" password="{os.getenv("KAFKA_SASL_PASSWORD")}";',
+        "startingOffsets": "earliest"
 }
 
-SCHEMA_REGISTRY_URL = os.getenv('SCHEMA_REGISTRY_URL')
-AUTH_USER_INFO = os.getenv('BASIC_AUTH_USER_INFO')
-
 SCHEMA_REGISTRY_CONFIG = {
-    "url": SCHEMA_REGISTRY_URL,
-    "basic.auth.user.info": AUTH_USER_INFO
+    "url": os.getenv("SCHEMA_REGISTRY_URL"),
+    "basic.auth.user.info": os.getenv("BASIC_AUTH_USER_INFO")
 }
