@@ -3,7 +3,7 @@ from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, window, sum, expr, current_timestamp, udf
 from pyspark.sql.avro.functions import from_avro
 from pyspark.sql.types import BinaryType
-from Config import schema_registry_url, auth_user_info, spark_consumer_conf, snowflake_conf
+from utils.config import SCHEMA_REGISTRY_URL, AUTH_USER_INFO, CONSUMER_CONFIG, SNOWFLAKE_OPTIONS
 
 
 spark = (
@@ -17,14 +17,14 @@ def create_kafka_stream(topic_name):
     return (
         spark.readStream
         .format("kafka")
-        .options(**spark_consumer_conf)
+        .options(**CONSUMER_CONFIG)
         .option("subscribe", topic_name)
         .option("startingOffsets", "earliest")
         .load()
     )
 
 
-checkout_stream = create_kafka_stream("checkout_topic")
+checkout_stream = create_kafka_stream("movies_catalog_enriched_topic")
 
 
 def deserialize_avro_data(dataframe, event_type):
@@ -33,10 +33,9 @@ def deserialize_avro_data(dataframe, event_type):
     """
     try:
         schema_registry_conf = {
-            'url': schema_registry_url,
-            'basic.auth.user.info': auth_user_info
+            'url': SCHEMA_REGISTRY_URL,
+            'basic.auth.user.info': AUTH_USER_INFO,
         }
-        print("Schema Registry Config:", schema_registry_conf)
 
         schema_registry_client = SchemaRegistryClient(schema_registry_conf)
         print("Schema Registry Client Initialized Successfully!")
@@ -64,13 +63,13 @@ def deserialize_avro_data(dataframe, event_type):
         raise
 
 
-checkout_processed = deserialize_avro_data(checkout_stream, "checkout")
+checkout_processed = deserialize_avro_data(checkout_stream, "movies_catalog_enriched")
 
 
 checkout_processed = checkout_processed.select(
     col("movie_id").cast("string"),
-    col("purchase_amount").cast("double"),
-    expr("CAST(timestamp AS timestamp)").alias("timestamp")
+    col("parsed_price").cast("float"),
+    expr("CAST(event_time AS timestamp)").alias("timestamp")
 )
 
 
@@ -82,7 +81,7 @@ movie_sales = (
         col("movie_id")
     )
     .agg(
-        sum("purchase_amount").alias("total_sales")
+        sum("parsed_price").alias("total_sales")
     )
     .select(
         col("movie_id"),
@@ -97,7 +96,7 @@ movie_sales = (
 def write_to_snowflake(batch_df, batch_id):
     batch_df.write \
         .format("snowflake") \
-        .options(**snowflake_conf) \
+        .options(**SNOWFLAKE_OPTIONS) \
         .option("dbtable", "movie_sales_metrics") \
         .mode("append") \
         .save()
@@ -107,11 +106,7 @@ query = (
     movie_sales.writeStream
     .foreachBatch(write_to_snowflake)
     .outputMode("update")  
-    .option("checkpointLocation", "checkpointMovieSales")
     .start()
 )
-
-
-
 
 query.awaitTermination()
