@@ -5,7 +5,7 @@ from uuid import uuid4
 from utils.kafka_producer import KafkaProducer
 from utils.avro_manager import AvroSerializationManager
 from user_registration_event import UserRegistration, generate_random_registration
-from utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
+from utils.config import PRODUCER_CONFIG, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
 from confluent_kafka.serialization import SerializationContext, MessageField
 from dotenv import load_dotenv
 
@@ -33,7 +33,7 @@ def main():
     """
     Main function to produce user registration events to Kafka.
     """
-    producer = KafkaProducer(PRODUCER_CONF)
+    producer = KafkaProducer(PRODUCER_CONFIG)
     
     try:
         while True:

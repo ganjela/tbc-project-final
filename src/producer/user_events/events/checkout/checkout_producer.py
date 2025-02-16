@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 
 from utils.kafka_producer import KafkaProducer
 from utils.avro_manager import AvroSerializationManager
-from producer.user_events.checkout.checkout_event import CheckoutEvent, generate_random_checkout
+from checkout_event import CheckoutEvent, generate_random_checkout
 from confluent_kafka.serialization import SerializationContext, MessageField
-from utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
+from utils.config import PRODUCER_CONFIG, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
 
 load_dotenv()
 
@@ -26,7 +26,7 @@ def main() -> None:
     """
     Main function to continuously produce checkout events to a Kafka topic.
     """
-    producer = KafkaProducer(PRODUCER_CONF)
+    producer = KafkaProducer(PRODUCER_CONFIG)
     try:
         while True:
             checkout_event = generate_random_checkout(USER_DB_PATH)

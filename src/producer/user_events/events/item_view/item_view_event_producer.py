@@ -5,7 +5,7 @@ from uuid import uuid4
 from dotenv import load_dotenv
 from utils.kafka_producer import KafkaProducer
 from utils.avro_manager import AvroSerializationManager
-from utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
+from utils.config import PRODUCER_CONFIG, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
 from item_view_event import ItemViewEvent, generate_random_item_view
 from confluent_kafka.serialization import SerializationContext, MessageField
 
@@ -30,7 +30,7 @@ def main() -> None:
     """
     Main function to continuously produce item view events to a Kafka topic.
     """
-    producer = KafkaProducer(PRODUCER_CONF)
+    producer = KafkaProducer(PRODUCER_CONFIG)
     
     try:
         while True:

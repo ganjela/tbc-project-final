@@ -3,7 +3,7 @@ import logging
 from uuid import uuid4
 from utils.kafka_producer import KafkaProducer
 from utils.avro_manager import AvroSerializationManager
-from utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
+from utils.config import PRODUCER_CONFIG, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
 from events import SignInEvent, generate_random_sign_in
 from events import SignOutEvent, generate_random_sign_out
 from events import CheckoutEvent, generate_random_checkout
@@ -20,7 +20,7 @@ sys.dont_write_bytecode = True
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-producer = KafkaProducer(PRODUCER_CONF)
+producer = KafkaProducer(PRODUCER_CONFIG)
 
 EVENT_TOPICS = {
     "sign_in": "sign_in_topic",

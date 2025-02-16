@@ -3,13 +3,12 @@ import os
 import sys
 from typing import Iterator, Tuple
 
-from pyspark.sql import SparkSession, Row, DataFrame
+from pyspark.sql import SparkSession, Row
 from utils.kafka_producer import KafkaProducer
 from utils.avro_manager import AvroSerializationManager
-from utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
+from utils.config import PRODUCER_CONFIG, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
 from confluent_kafka.serialization import SerializationContext, MessageField
 from producer.movie_events.movie_event_helpers import movie_row_to_dict, movie_to_dict
-from producer.movie_events.movie_processor import process_movies
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -56,7 +55,7 @@ def send_partition(partition: Iterator[Row]) -> None:
         TOPIC,
         movie_to_dict
     )
-    producer: KafkaProducer = KafkaProducer(PRODUCER_CONF)
+    producer: KafkaProducer = KafkaProducer(PRODUCER_CONFIG)
     
     serialized_messages = map(
         lambda row: serialize_movie(row, avro_manager, TOPIC),
@@ -94,18 +93,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# if __name__ == "__main__":
-#     spark: SparkSession = SparkSession.builder \
-#         .appName("MovieEventsProducer") \
-#         .getOrCreate()
-    
-#     try:
-#         valid_movies: DataFrame = process_movies(spark, MOVIES_FILE_PATH)
-#         valid_movies.rdd.foreachPartition(send_partition)
-#     except Exception as e:
-#         logging.error(f"Spark processing error: {str(e)}")
-#     finally:
-#         spark.stop()
-#         logging.info("Spark session closed")

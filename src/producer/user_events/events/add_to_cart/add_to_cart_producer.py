@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from utils.kafka_producer import KafkaProducer
 from utils.avro_manager import AvroSerializationManager
 from add_to_cart_event import AddToCartEvent, generate_random_add_to_cart_event
-from utils.producer_config import PRODUCER_CONF, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
+from utils.config import PRODUCER_CONFIG, SCHEMA_REGISTRY_URL, AUTH_USER_INFO
 from confluent_kafka.serialization import SerializationContext, MessageField
 
 load_dotenv()
@@ -38,7 +38,7 @@ def main():
     """
     Main function to run the Kafka producer for add-to-cart events.
     """
-    producer = KafkaProducer(PRODUCER_CONF)
+    producer = KafkaProducer(PRODUCER_CONFIG)
     try:
         while True:
             event_callable = generate_random_add_to_cart_event(USER_DB_PATH, ITEM_IDS_PATH)
