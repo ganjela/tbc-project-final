@@ -64,7 +64,7 @@ def get_schema_from_schema_registry(schema_registry_config, schema_registry_subj
         raise
 
 
-def spark_consumer(topic, schema, table_name):
+def consume_topics(topic, schema, table_name):
     """Structured Streaming consumer with Avro decoding and Snowflake writer."""
     logger.info("Initializing consumer for topic: %s", topic)
     
@@ -128,7 +128,7 @@ if __name__ == "__main__":
     try:
         logger.info("Starting streaming application")
         queries = [
-            spark_consumer(topic, schema, table_name)
+            consume_topics(topic, schema, table_name)
             for topic, (schema, table_name) in TOPIC_TABLE_MAPPING.items()
         ]
 
