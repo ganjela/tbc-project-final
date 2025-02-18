@@ -48,6 +48,6 @@ with DAG(
 
     cleanup_task = BashOperator(
     task_id="cleanup_processed_data",
-    bash_command="rm -rf /home/crow/Desktop/tbc-project-final/data/processed/*",
+    bash_command=f"rm -rf {PROCESSED_INPUT_PATH}",
     )
     file_sensor >> process_task >> produce_task >> cleanup_task
